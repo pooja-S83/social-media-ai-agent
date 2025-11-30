@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SocialAI Chat</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body { background:#f5f5f5; color:black; transition:0.3s; }
+.navbar { width:100%; background:#4f46e5; color:white; display:flex; justify-content:space-between; align-items:center; padding:0.75rem 2rem; }
+.navbar h1 { font-size:1.5rem; font-weight:bold; }
+.chat-wrapper { display:flex; height:85vh; max-width:1200px; margin:20px auto; gap:10px; }
+.history-container { width:25%; background:#f0f0f0; border-radius:12px; padding:10px; overflow-y:auto; transition:0.3s; }
+.history-item { margin-bottom:8px; padding:8px; background:#e5e7eb; border-radius:8px; cursor:pointer; }
+.history-item:hover { background:#d1d5db; }
+.chat-container { width:75%; display:flex; flex-direction:column; justify-content:space-between; }
+.messages { flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; }
+.message { margin:10px 0; display:flex; flex-direction:column; }
+.message.user { align-items:flex-end; }
+.message.ai { align-items:flex-start; position:relative; }
+.bubble { padding:12px 16px; border-radius:12px; max-width:70%; word-wrap:break-word; overflow-wrap:break-word; white-space:pre-wrap; line-height:1.5; position:relative; display:inline-block; }
+.bubble.user { background:#e5e7eb; color:black; border-top-right-radius:0; }
+.bubble.ai { background:#4f46e5; color:white; border-top-left-radius:0; }
+.bubble img { max-width:100%; height:auto; border-radius:12px; margin-top:5px; }
+.timestamp { font-size:0.7rem; opacity:0.7; margin-top:4px; }
+.copy-icon { position:absolute; top:4px; right:4px; cursor:pointer; font-size:0.85rem; color:yellow; display:none; }
+.message.ai:hover .copy-icon { display:block; }
+#imagePreview { display:none; margin-bottom:10px; position:relative; }
+.image-preview { max-width:200px; max-height:200px; border-radius:12px; object-fit:cover; }
+.typing-dots { animation: blink 1.4s infinite; }
+@keyframes blink {
+  0%, 20% { opacity: 0.2; }
+  40% { opacity: 1; }
+  60%, 100% { opacity: 0.2; }
+}
+input, button { outline:none; }
+
+/* Modal styles */
+.modal { display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); }
+.modal-content { background:white; margin:5% auto; padding:30px; border-radius:12px; width:80%; max-width:600px; max-height:80vh; overflow-y:auto; }
+.modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+.close-modal { cursor:pointer; font-size:1.5rem; font-weight:bold; }
+.suggestion-item { padding:15px; margin:10px 0; background:#f0f0f0; border-radius:8px; cursor:pointer; transition:0.2s; }
+.suggestion-item:hover { background:#e0e0e0; transform:translateY(-2px); }
+
+/* Dark mode */
+body.dark { background:#1e1e1e; color:white; }
+body.dark .navbar { background:#2a2a2a; }
+body.dark .history-container { background:#2d2d2d; }
+body.dark .history-item { background:#3a3a3a; color:white; }
+body.dark .history-item:hover { background:#4a4a4a; }
+body.dark .bubble.user { background:#444; color:white; }
+body.dark input { background:#333; color:white; border-color:#555; }
+body.dark .modal-content { background:#2d2d2d; color:white; }
+body.dark .suggestion-item { background:#3a3a3a; color:white; }
+body.dark .suggestion-item:hover { background:#4a4a4a; }
+</style>
+</head>
+<body class="light">
+
+<div class="navbar">
+  <h1>SocialAI</h1>
+  <div class="flex items-center">
+    <button onclick="openPostSuggestions()" class="px-4 py-2 bg-green-600 text-white rounded mr-4">✨ Post Ideas</button>
+    <button onclick="toggleTheme()" id="themeBtn" class="px-4 py-2 bg-gray-900 text-white rounded mr-4">🌙 Dark Mode</button>
+    <button onclick="newChat()" class="px-4 py-2 bg-purple-900 text-white rounded mr-4">New Chat</button>
+    <button class="px-4 py-2 bg-purple-700 text-white rounded mr-2">Login</button>
+    <button class="px-4 py-2 bg-purple-300 text-black rounded">Sign Up</button>
+  </div>
+</div>
+
+<div class="chat-wrapper">
+  <div class="history-container" id="historyContainer">
+    <h2 class="text-lg font-bold mb-3">📜 History</h2>
+  </div>
+
+  <div class="chat-container">
+    <div class="messages" id="chatContainer"></div>
+
+    <div id="imagePreview">
+      <img id="previewImg" class="image-preview" src="" alt="Preview">
+      <button onclick="removeImage()" class="absolute top-0 right-0 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600">✕</button>
+    </div>
+
+    <div class="flex mt-2">
+      <label for="imageInput" class="cursor-pointer bg-purple-500 text-white px-4 py-2 rounded mr-2 flex items-center">
+        📎
+        <input id="imageInput" type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+      </label>
+      <input id="messageInput" type="text" placeholder="Type your message..." class="flex-1 px-4 py-2 rounded border border-gray-300" onkeypress="if(event.key==='Enter') sendMessage()">
+      <button onclick="sendMessage()" class="ml-2 px-4 py-2 bg-purple-600 text-white rounded">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Post Suggestions Modal -->
+<div id="postModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="text-2xl font-bold">✨ Post Suggestions</h2>
+      <span class="close-modal" onclick="closePostModal()">&times;</span>
+    </div>
+    <div id="suggestionsContainer">
+      <p class="text-center text-gray-500 mb-4">Click on any suggestion to use it as your message!</p>
+      
+      <div class="mb-4">
+        <input type="text" id="customPrompt" placeholder="Or type your own post idea..." class="w-full px-4 py-2 rounded border border-gray-300 mb-2">
+        <button onclick="useCustomPrompt()" class="w-full px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">Use Custom Prompt</button>
+      </div>
+
+      <div class="suggestion-item" onclick="useSuggestion('Help me create an engaging Instagram caption for my latest photo')">
+        📸 <strong>Instagram Caption</strong><br>
+        <small>Generate creative captions for your posts</small>
+      </div>
+      <div class="suggestion-item" onclick="useSuggestion('Write a viral Twitter thread about productivity tips')">
+        🐦 <strong>Twitter Thread</strong><br>
+        <small>Create engaging Twitter content</small>
+      </div>
+      <div class="suggestion-item" onclick="useSuggestion('Generate LinkedIn post ideas for professional networking')">
+        💼 <strong>LinkedIn Post</strong><br>
+        <small>Professional content for your network</small>
+      </div>
+      <div class="suggestion-item" onclick="useSuggestion('Create a Facebook post to engage my audience')">
+        👥 <strong>Facebook Post</strong><br>
+        <small>Engaging content for your community</small>
+      </div>
+      <div class="suggestion-item" onclick="useSuggestion('Write trending hashtags for my social media post')">
+        #️⃣ <strong>Hashtag Generator</strong><br>
+        <small>Discover trending hashtags</small>
+      </div>
+      <div class="suggestion-item" onclick="useSuggestion('Help me write a compelling story for Instagram Stories')">
+        📱 <strong>Story Ideas</strong><br>
+        <small>Creative stories for engagement</small>
+      </div>
+      <div class="suggestion-item" onclick="useSuggestion('Analyze my image and suggest the best social media platform and caption for it')">
+        🎨 <strong>Image Analysis</strong><br>
+        <small>AI-powered image suggestions</small>
+      </div>
+      <div class="suggestion-item" onclick="useSuggestion('Give me 5 content ideas for this week based on trending topics')">
+        🔥 <strong>Content Calendar</strong><br>
+        <small>Weekly content planning</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleTheme(){
+  document.body.classList.toggle("dark");
+  const btn=document.getElementById("themeBtn");
+  if(document.body.classList.contains("dark")){
+    btn.textContent="☀️ Light Mode";
+    btn.className="px-4 py-2 bg-yellow-500 text-black rounded mr-4";
+  } else {
+    btn.textContent="🌙 Dark Mode";
+    btn.className="px-4 py-2 bg-gray-900 text-white rounded mr-4";
+  }
+}
+
+let conversations=[], messageHistoryUI=[], messageHistoryAPI=[], currentImage=null;
+
+function getTimestamp(){
+  const now = new Date();
+  return now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function handleImageUpload(event){
+  const file=event.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    currentImage=e.target.result;
+    document.getElementById("previewImg").src=currentImage;
+    document.getElementById("imagePreview").style.display="block";
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImage(){
+  currentImage=null;
+  document.getElementById("previewImg").src="";
+  document.getElementById("imagePreview").style.display="none";
+  document.getElementById("imageInput").value="";
+}
+
+function addMessage(content, role){
+  const chat=document.getElementById("chatContainer");
+  const div=document.createElement("div");
+  div.className=`message ${role}`;
+  const timestamp = getTimestamp();
+  let html=content.replace(/\n/g,"<br>");
+  if(role==="ai"){
+    div.innerHTML=`<div class="bubble ai">${html}<span class="copy-icon" onclick="copyToClipboard(\`${content.replace(/`/g,'\\`')}\`)">📋</span></div><div class="timestamp">AI · ${timestamp}</div>`;
+  } else {
+    div.innerHTML=`<div class="bubble user">${html}</div><div class="timestamp">You · ${timestamp}</div>`;
+  }
+  chat.appendChild(div);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+function copyToClipboard(text){ navigator.clipboard.writeText(text); alert("Copied!"); }
+
+function saveConversation(title){
+  conversations.push({
+    title,
+    messagesUI: JSON.parse(JSON.stringify(messageHistoryUI)),
+    messagesAPI: JSON.parse(JSON.stringify(messageHistoryAPI))
+  });
+  updateHistoryList();
+}
+
+function updateHistoryList(){
+  const container=document.getElementById("historyContainer");
+  container.innerHTML=`<h2 class="text-lg font-bold mb-3">📜 History</h2>`;
+  conversations.forEach((chat,index)=>{
+    const div=document.createElement("div");
+    div.className="history-item";
+    div.textContent=chat.title;
+    div.onclick=()=>openChat(index);
+    container.appendChild(div);
+  });
+}
+
+function openChat(index){
+  const chat=conversations[index];
+  const chatBox=document.getElementById("chatContainer");
+  chatBox.innerHTML="";
+  messageHistoryUI=JSON.parse(JSON.stringify(chat.messagesUI));
+  messageHistoryAPI=JSON.parse(JSON.stringify(chat.messagesAPI));
+  messageHistoryUI.forEach(m=>addMessage(m.content,m.role));
+}
+
+function newChat(){ document.getElementById("chatContainer").innerHTML=""; messageHistoryUI=[]; messageHistoryAPI=[]; }
+
+function openPostSuggestions(){
+  document.getElementById("postModal").style.display="block";
+}
+
+function closePostModal(){
+  document.getElementById("postModal").style.display="none";
+}
+
+function useSuggestion(suggestion){
+  document.getElementById("messageInput").value = suggestion;
+  closePostModal();
+  document.getElementById("messageInput").focus();
+}
+
+function useCustomPrompt(){
+  const customPrompt = document.getElementById("customPrompt").value.trim();
+  if(customPrompt){
+    document.getElementById("messageInput").value = customPrompt;
+    closePostModal();
+    document.getElementById("messageInput").focus();
+    document.getElementById("customPrompt").value = "";
+  } else {
+    alert("Please enter a custom prompt!");
+  }
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+  const modal = document.getElementById("postModal");
+  if (event.target == modal) {
+    closePostModal();
+  }
+}
+
+async function sendMessage(){
+  const input=document.getElementById("messageInput");
+  const message=input.value.trim();
+  if(!message && !currentImage){ alert("Type message or upload image"); return;}
+
+  // Display user message
+  let displayMessage=message;
+  if(currentImage) displayMessage+=`<br><img src="${currentImage}" class="image-preview">`;
+  addMessage(displayMessage,"user");
+
+  // Show typing indicator
+  const typingDiv = document.createElement("div");
+  typingDiv.className = "message ai";
+  typingDiv.id = "typingIndicator";
+  typingDiv.innerHTML = `<div class="bubble ai">AI is typing<span class="typing-dots">...</span></div>`;
+  document.getElementById("chatContainer").appendChild(typingDiv);
+  document.getElementById("chatContainer").scrollTop = document.getElementById("chatContainer").scrollHeight;
+
+  // Prepare API payload
+  let contentArray=[];
+  if(message) contentArray.push({ type:"text", text: message });
+  if(currentImage) contentArray.push({ type:"input_image", image_url: currentImage });
+
+  // Update histories
+  messageHistoryUI.push({ role:"user", content:displayMessage });
+  messageHistoryAPI.push({ role:"user", content: contentArray });
+
+  input.value=""; removeImage();
+
+  try{
+    const res=await fetch("http://localhost:5000/api/chat",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ contentArray, history: messageHistoryAPI })
+    });
+    const data=await res.json();
+    
+    // Remove typing indicator
+    const typing = document.getElementById("typingIndicator");
+    if(typing) typing.remove();
+    
+    const aiMsg=data.content||"No response";
+    addMessage(aiMsg,"ai");
+    messageHistoryUI.push({ role:"assistant", content:aiMsg });
+    messageHistoryAPI.push({ role:"assistant", content:[{type:"text", text: aiMsg}] });
+
+    saveConversation(message.substring(0,25)||"New Chat");
+  }catch(e){ 
+    // Remove typing indicator
+    const typing = document.getElementById("typingIndicator");
+    if(typing) typing.remove();
+    
+    addMessage("Error: "+e.message,"ai"); 
+  }
+}
+</script>
+</body>
+</html>
