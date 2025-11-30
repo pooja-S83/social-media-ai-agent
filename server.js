@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
-import Groq from "groq-sdk";
+import Groq from "groq-sdk/index.mjs";
+import 'dotenv/config';
 import path from "path";
 import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
